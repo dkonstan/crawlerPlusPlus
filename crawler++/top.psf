@@ -1,0 +1,10 @@
+PSF
+     0 !NTITLE
+     4 !NATOM
+       1 MAIN 1    X    C    C      0.000000       0.00000           0
+       2 MAIN 1    X    C    C      0.000000       0.00000           0
+       3 MAIN 1    X    C    C      0.000000       0.00000           0
+       4 MAIN 1    X    C    C      0.000000       0.00000           0
+
+     3 !NBOND: bonds
+       1      2      2      3      3      4      
