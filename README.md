@@ -17,5 +17,4 @@ go directly from Topology, Parameters, Coordinates, Velocities, and Forces to Si
 I love operator overloading both in Python and here. It is a little sad that C++ stdlib didn't overload << for a std::vector, though.
 That would've been convenient, but I guess you can just do it yourself in a minute anyway so...
 
-Anyway, today's been a great day science research / grad school wise (for unrelated reasons) and I'm happy to share crawler++ here right now. Enjoy. 
-Warning, it's far from finished hehe.
+Anyway, today's been a great day science research / grad school wise (for unrelated reasons) and I'm happy to share crawler++ here right now. Happy crawling. Warning, it's far from finished hehe.
