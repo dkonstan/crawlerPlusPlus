@@ -451,6 +451,11 @@ void Parameters::readParameters(std::string paramFile)
 		{
 			reportInterval = std::stod(line.substr(nthSubstr(1, line, delim)));
 		}
+		else if (line.rfind("collisionFreq:") == 0)
+		{
+			// default 0
+			collisionFreq = std::stod(line.substr(nthSubstr(1, line, delim)));
+		}
 	}
 	prm.close();
 
@@ -484,7 +489,7 @@ std::ostream& operator<<(std::ostream& os, const Parameters& prm)
 	os << "\tintegrator: " << prm.integrator << std::endl;
 	os << "\tconstrainBonds: " << prm.constrainBonds << std::endl;
 	os << "\ttemperature: " << prm.temperature << std::endl;
-	os << "\treportInterval" << prm.reportInterval << std::endl;
+	os << "\treportInterval: " << prm.reportInterval << std::endl;
 	return os;
 }
 
@@ -912,4 +917,80 @@ std::vector<double> cross(const std::vector<double>& a, const std::vector<double
 	prod[2] = a[0] * b[1] - a[1] * b[0];
 	return prod;
 }
+
+double sqNorm(std::vector<double>& a, std::vector<double>& b)
+{
+	double sqnorm = 0.0;
+	for (int i = 0; i < 3; ++i)
+	{
+		sqnorm += (a[i] - b[i]) * (a[i] - b[i]);
+	}
+	return sqnorm;
+}
+
+void growFillZeros3D(std::vector<std::vector<std::vector<double> > >& a, int ni, int nj, int nk)
+{
+	int i, j, k;
+	for (i = 0; i < ni; ++i)
+	{
+		std::vector<std::vector<double> > ai;
+		for (j = 0; j < nj; ++j)
+		{
+			std::vector<double> aj;
+			for (k = 0; k < nk; ++k)
+			{
+				aj.push_back(0.0);
+			}
+			ai.push_back(aj);
+		}
+		a.push_back(ai);
+
+	}
+}
+
+std::vector<double> flipSign(std::vector<double>& vec)
+{
+	std::vector<double> flipped(vec.size());
+	for (int i = 0; i < vec.size(); ++i)
+	{
+		flipped[i] = -vec[i];
+	}
+
+	return flipped;
+}
+
+std::vector<double> solveEquation(Matrix& mat, std::vector<double>&& vec)
+{
+	Matrix invMat = invertMatrix(mat);
+
+	std::vector<double> answer(vec.size());
+	std::fill(answer.begin(), answer.end(), 0.0);
+	int i, j;
+	for (i = 0; i < vec.size(); ++i)
+	{
+		for (j = 0; j < vec.size(); ++j)
+		{
+			answer[i] += invMat[i][j] * vec[j];
+		}
+	}
+
+	return answer;
+}
+
+double max(std::vector<double> vec)
+{
+	// for positive valued vectors only
+	double maxVal = 0.0;
+	for (int i = 0; i < vec.size(); ++i)
+	{
+		if (vec[i] > maxVal)
+		{
+			maxVal = vec[i];
+		}
+	}
+
+	return maxVal;
+}
+
+
 } // namespace utils

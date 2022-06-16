@@ -1,6 +1,7 @@
-nSteps: 1000000
-dt: 0.02
+nSteps: 200000
+dt: 0.1
 constrainBonds: 0
 integrator: vv
-temperature: 100000
+temperature: 3000
 reportInterval: 100
+collisionFreq: 1.0

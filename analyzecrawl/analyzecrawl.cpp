@@ -21,11 +21,19 @@ inline int nthSubstr(int n, const std::string& s, const std::string& p) {
    }
 }
 
+double mean(std::vector<double> data)
+{
+	double sum = 0.0;
+	for (int i = 0; i < data.size(); ++i)
+	{
+		sum += data[i];
+	}
+	return sum / data.size();
+}
 
 int main(int argc, char* argv[])
 {
-	std::string helpMessage = "\n./analyzecrawl [whatToExtract] [logfile] > [.csv]\n
-							  ";
+	std::string helpMessage = "\n./analyzecrawl [whatToExtract] [logfile] > [.csv]\n";
 
 	if (argc < 3)
 	{
@@ -47,6 +55,7 @@ int main(int argc, char* argv[])
 		std::cout << helpMessage << std::endl;
 		exit(1);
 	}
+	std::vector<double> data;
 	double value;
 	if (logfile.good())
 	{
@@ -66,13 +75,17 @@ int main(int argc, char* argv[])
 						value = std::stod(line.substr(prefix.length() + delim.length()));
 						if (line == "---- CRAWLER++ has crawled.---") exit(0);
 						std::cout << value << std::endl;
+						data.push_back(value);
 						for (int j = 0; j < 5; ++j) getline(logfile, line);
-						if (!logfile.good()) exit(0);
+						if (!logfile.good()){
+							std::cout << "mean: " << mean(data) << std::endl;
+							exit(0);
+						}
 					}
 				}
 			}
 		}
-		catch(std::out_of_range& e) { exit(0); } ;
+		catch(std::out_of_range& e) { std::cout << "mean: " << mean(data) << std::endl; exit(0); } ;
 	}
 	return 0;
 }

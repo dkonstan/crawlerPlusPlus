@@ -1,5 +1,6 @@
 #include <iostream>
 #include <vector>
+#include <random>
 #include "forces.hpp"
 #include "utils.hpp"
 
@@ -24,13 +25,17 @@ private:
 	std::string log;
 	std::string outfile;
 	Matrix currForces, newCurrForces;
-	double currEnergy, currKineticEnergy;
+	double currEnergy, currKineticEnergy, currTemperature;
 	double nDegreesOfFreedom;
-	double currTemperature;
+	std::vector<double> bondLengths;
+	std::vector<double> lambdas;
 	double getTotalEnergy(const Matrix& xyz); // actually potential energy...
 	double getKineticEnergy(const Matrix& velxyz);
 	Matrix getTotalForces(const Matrix& xyz);
 	void integrateVV();
+	void integrateLangevin();
+	void integrateVVSHAKE();
+	void integrateLangevinSHAKE();
 	void minimizeEnergy(std::ofstream& logFile, std::ofstream& trajFile);
 	void runVVDynamics(std::ofstream& logFile, std::ofstream& trajFile);
 	void runLangevinDynamics(std::ofstream& logFile, std::ofstream& trajFile);

@@ -45,10 +45,11 @@ friend std::ostream& operator<<(std::ostream& os, const Topology& topol);
 class Coordinates
 {
 public:
+	Matrix xyz;
+
 	Coordinates(std::string crdFile);
 	~Coordinates();
 	void readCoordinates(std::string crdFile);
-	Matrix xyz;
 	void checkCoordinates(const Topology& top);
 friend std::ostream& operator<<(std::ostream& os, const Coordinates& crd);
 };
@@ -57,16 +58,18 @@ friend std::ostream& operator<<(std::ostream& os, const Coordinates& crd);
 class Parameters
 {
 public:
-	Parameters(std::string paramFile);
-	void readParameters(std::string paramFile);
-	void checkParameters();
-	~Parameters();
 	std::string integrator;
 	int nSteps;
 	double dt;
 	bool constrainBonds;
 	double temperature;
 	int reportInterval;
+	double collisionFreq = 0;
+
+	Parameters(std::string paramFile);
+	void readParameters(std::string paramFile);
+	void checkParameters();
+	~Parameters();
 friend std::ostream& operator<<(std::ostream& os, const Parameters& prm);
 
 };
@@ -74,9 +77,10 @@ friend std::ostream& operator<<(std::ostream& os, const Parameters& prm);
 class Velocities
 {
 public:
+	Matrix xyz;
+
 	Velocities(const Topology& top, const Parameters& prm);
 	~Velocities();
-	Matrix xyz;
 	void setToTemperature(Topology& top, double temperature);
 friend std::ostream& operator<<(std::ostream& os, const Velocities& vel);	
 };
@@ -90,20 +94,25 @@ std::ostream& operator<<(std::ostream& os, const std::vector<std::string>& v);
 
 
 namespace utils {
-std::vector<double> pbcAdjust(const Topology& top, std::vector<double>& vec);
-double norm(const std::vector<double>& vec);
-void fillForcesCoordinates(Matrix& forces, int nAtoms);
-void addForces(Matrix& forces, const Matrix&& forces2);
-Matrix subVecs(const Matrix& a, const Matrix& b);
-Matrix matMul(const Matrix& a, const Matrix& b);
-Matrix transpose(const Matrix& a);
-double matNorm(const Matrix& a);
-void growFillZeros(Matrix &m, int rows, int cols);
-void fillZeros(Matrix &m);
-Matrix invertMatrix(Matrix &m);
-void growFillEye(Matrix &m, int N);
-Matrix attachEyeToMatrix(Matrix& m, Matrix& id);
-double dot(const std::vector<double>& v1, const std::vector<double>& v2);
-std::vector<double> cross(const std::vector<double>& a, const std::vector<double>& b);
+	std::vector<double> pbcAdjust(const Topology& top, std::vector<double>& vec);
+	double norm(const std::vector<double>& vec);
+	void fillForcesCoordinates(Matrix& forces, int nAtoms);
+	void addForces(Matrix& forces, const Matrix&& forces2);
+	Matrix subVecs(const Matrix& a, const Matrix& b);
+	Matrix matMul(const Matrix& a, const Matrix& b);
+	Matrix transpose(const Matrix& a);
+	double matNorm(const Matrix& a);
+	void growFillZeros(Matrix &m, int rows, int cols);
+	void fillZeros(Matrix &m);
+	Matrix invertMatrix(Matrix &m);
+	void growFillEye(Matrix &m, int N);
+	Matrix attachEyeToMatrix(Matrix& m, Matrix& id);
+	double dot(const std::vector<double>& v1, const std::vector<double>& v2);
+	std::vector<double> cross(const std::vector<double>& a, const std::vector<double>& b);
+	double sqNorm(std::vector<double>& a, std::vector<double>& b);
+	void growFillZeros3D(std::vector<std::vector<std::vector<double> > >& a, int ni, int nj, int nk);
+	std::vector<double> flipSign(std::vector<double>& vec);
+	std::vector<double> solveEquation(Matrix& mat, std::vector<double>&& vec);
+	double max(std::vector<double> vec);
 }
 #endif // UTILS_HPP

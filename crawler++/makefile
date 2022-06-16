@@ -5,7 +5,7 @@ SRC = $(wildcard *.cpp)
 OBJ = $(patsubst %.cpp, %.o, $(SRC))
 
 # C_FLAGS = -O3 -DMKL_ILP64 -m64 $(INC_DIR) -fpic
-C_FLAGS = -O3 -std=c++17
+C_FLAGS = -O3 -std=c++11
 # INC_DIR = \
 # -I.\
 # -I/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/ \
