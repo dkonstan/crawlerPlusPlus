@@ -46,7 +46,10 @@ double Simulation::getKineticEnergy(const Matrix& velxyz)
 	{
 		double m = top.masses[i];
 		double dotProduct = 0.0;
-		for (int j = 0; j < 3; ++j) dotProduct += velxyz[i][j] * velxyz[i][j];
+		for (int j = 0; j < 3; ++j)
+		{
+			dotProduct += velxyz[i][j] * velxyz[i][j];
+		}
 		totalKE += 0.5 * m * dotProduct;
 	}
 
@@ -86,7 +89,8 @@ void Simulation::writeCoordinates(std::ofstream& output)
 	output << top.nAtoms << "\ncomment\n";
 	for (int i = 0; i < top.nAtoms; ++i)
 	{
-		output << top.atomTypes[i] << " " << crd.xyz[i][0] << " " << crd.xyz[i][1] << " " << crd.xyz[i][2] << "\n";
+		// for output put it back into Å from meters
+		output << top.atomTypes[i] << " " << crd.xyz[i][0] * 1e10 << " " << crd.xyz[i][1] * 1e10 << " " << crd.xyz[i][2] * 1e10 << "\n";
 	}
 }
 
@@ -99,11 +103,14 @@ void Simulation::minimizeEnergy(std::ofstream& logFile, std::ofstream& trajFile)
 	Matrix newForces;
 	utils::fillForcesCoordinates(newCoords, top.nAtoms);
 
-	double stepSize = 1e-3; // just to start this off safely
+	double stepSize = 0.001; // just to start this off safely
 
 	logFile << "starting minimization..." << std::endl;
 
-	Matrix currForces = getTotalForces(crd.xyz);
+	// std::cout << top << std::endl;
+	// exit(0);
+	currForces = getTotalForces(crd.xyz);
+	// exit(0);
 	double energy = getTotalEnergy(crd.xyz);
 
 	for (s = 0; s < param.nSteps; ++s)
@@ -136,8 +143,14 @@ void Simulation::minimizeEnergy(std::ofstream& logFile, std::ofstream& trajFile)
 		// 
 		crd.xyz = newCoords;
 		currForces = newForces;
+		// std::cout << currForces[0] << std::endl;
+
 		energy = newEnergy;
-		writeCoordinates(trajFile);
+		if (s % 100 == 0)
+		{
+			std::cout << energy << std::endl;
+			writeCoordinates(trajFile);	
+		}
 	}
 	std::ofstream outFileObj;
 	outFileObj.open(outfile);
@@ -156,8 +169,6 @@ void Simulation::report(std::ofstream& logFile, std::ofstream& trajFile, int ste
 
 void Simulation::integrateVV()
 {
-	currForces = getTotalForces(crd.xyz);
-
 	int i, j;
 	double m;
 	for (i = 0; i < top.nAtoms; ++i)
@@ -181,42 +192,86 @@ void Simulation::integrateVV()
 }
 
 
-double randNormal(double mean, double stddev)
-{	
-	// Box muller method
-	// https://stackoverflow.com/questions/19944111/creating-a-gaussian-random-generator-with-a-mean-and-standard-deviation
-    static double n2 = 0.0;
-    static int n2_cached = 0;
-    if (!n2_cached)
-    {
-        double x, y, r;
-        do {
-            x = 2.0 * rand() / RAND_MAX - 1;
-            y = 2.0 * rand() / RAND_MAX - 1;
+void Simulation::integrateVVSHAKE()
+{
 
-            r = x * x + y * y;
-        } while (r == 0.0 || r > 1.0);
+	int i, j;
+	double m;
+	for (i = 0; i < top.nAtoms; ++i)
+	{
+		m = top.masses[i];
+		crd.xyz[i][0] = crd.xyz[i][0] + (param.dt * vel.xyz[i][0]) + ((param.dt * param.dt) / (2 * m)) * currForces[i][0];
+		crd.xyz[i][1] = crd.xyz[i][1] + (param.dt * vel.xyz[i][1]) + ((param.dt * param.dt) / (2 * m)) * currForces[i][1];
+		crd.xyz[i][2] = crd.xyz[i][2] + (param.dt * vel.xyz[i][2]) + ((param.dt * param.dt) / (2 * m)) * currForces[i][2];
+	}
 
-        {
-            double d = sqrt(-2.0 * log(r) / r);
-            double n1 = x * d;
-            n2 = y * d;
-            double result = n1*stddev + mean;
-            n2_cached = 1;
-            return result;
-        }
-    }
-    else
-    {
-        n2_cached = 0;
-        return n2 * stddev + mean;
-    }
+	Matrix newForces = getTotalForces(crd.xyz);
+
+	for (i = 0; i < top.nAtoms; ++i)
+	{
+		m = top.masses[i];
+		vel.xyz[i][0] = vel.xyz[i][0] + (1 / m) * (param.dt / 2) * (currForces[i][0] + newForces[i][0]);
+		vel.xyz[i][1] = vel.xyz[i][1] + (1 / m) * (param.dt / 2) * (currForces[i][1] + newForces[i][1]);
+		vel.xyz[i][2] = vel.xyz[i][2] + (1 / m) * (param.dt / 2) * (currForces[i][2] + newForces[i][2]) ;
+	}
+
+	shakePositions(top, crd.xyz, bondLengths, lambdas);
+	shakeVelocities(top, crd.xyz, vel.xyz, bondLengths, lambdas, param.dt, newForces);
+
+	currForces = newForces;
 }
 
-void Simulation::integrateLangevin()
-{
-	currForces = getTotalForces(crd.xyz);
 
+void Simulation::integrateVVSHAKEAngles()
+{
+
+	int i, j;
+	double m;
+	for (i = 0; i < top.nAtoms; ++i)
+	{
+		m = top.masses[i];
+		crd.xyz[i][0] = crd.xyz[i][0] + (param.dt * vel.xyz[i][0]) + ((param.dt * param.dt) / (2 * m)) * currForces[i][0];
+		crd.xyz[i][1] = crd.xyz[i][1] + (param.dt * vel.xyz[i][1]) + ((param.dt * param.dt) / (2 * m)) * currForces[i][1];
+		crd.xyz[i][2] = crd.xyz[i][2] + (param.dt * vel.xyz[i][2]) + ((param.dt * param.dt) / (2 * m)) * currForces[i][2];
+	}
+
+	Matrix newForces = getTotalForces(crd.xyz);
+
+	for (i = 0; i < top.nAtoms; ++i)
+	{
+		m = top.masses[i];
+		vel.xyz[i][0] = vel.xyz[i][0] + (1 / m) * (param.dt / 2) * (currForces[i][0] + newForces[i][0]);
+		vel.xyz[i][1] = vel.xyz[i][1] + (1 / m) * (param.dt / 2) * (currForces[i][1] + newForces[i][1]);
+		vel.xyz[i][2] = vel.xyz[i][2] + (1 / m) * (param.dt / 2) * (currForces[i][2] + newForces[i][2]) ;
+	}
+	shakeAngles(top, crd.xyz, bondAngles, lambdasAngle);
+	shakePositions(top, crd.xyz, bondLengths, lambdas);
+	shakeAnglesVelocities(top, crd.xyz, vel.xyz, bondAngles, lambdasAngle, param.dt, newForces);
+	shakeVelocities(top, crd.xyz, vel.xyz, bondLengths, lambdas, param.dt, newForces);
+
+	currForces = newForces;
+
+	std::vector<double> cog(3, 0.0);
+	for (i = 0; i < top.nAtoms; ++i)
+	{
+		cog[0] += crd.xyz[i][0];
+		cog[1] += crd.xyz[i][1];
+		cog[2] += crd.xyz[i][2];
+	}
+
+	cog[0] /= top.nAtoms;
+	cog[1] /= top.nAtoms;
+	cog[2] /= top.nAtoms;
+	for (i = 0; i < top.nAtoms; ++i)
+	{
+		crd.xyz[i][0] -= cog[0];
+		crd.xyz[i][1] -= cog[1];
+		crd.xyz[i][2] -= cog[2];
+	}
+}
+
+void Simulation::integrateLangevinSHAKEAngles()
+{
 	int i, j;
 	double mi;
 	double temp = param.temperature;
@@ -235,12 +290,93 @@ void Simulation::integrateLangevin()
 		sigmais[i] = sqrt(2 * boltzmannK * temp * gamma / mi);
 		for (j = 0; j < 3; ++j)
 		{
-			xit[i][j] = randNormal(0.0, 1.0);
-			thetat[i][j] = randNormal(0.0, 1.0);
+			xit[i][j] = utils::randNormal(0.0, 1.0);
+			thetat[i][j] = utils::randNormal(0.0, 1.0);
 		}
 		for (j = 0; j < 3; ++j)
 		{
-			At[i][j] = 0.5 * (dt * dt) * (currForces[i][j] - gamma * vel.xyz[i][j]) + sigmais[i] * pow(dt, 1.5) * ((0.5) * xit[i][j] + (1.0 / (2 * sqrt(3))) * thetat[i][j]);
+			At[i][j] = 0.5 * pow(dt, 2) * (currForces[i][j] / mi - gamma * vel.xyz[i][j]) + sigmais[i] * pow(dt, 1.5) * ((0.5) * xit[i][j] + (1.0 / (2 * sqrt(3))) * thetat[i][j]);
+			crd.xyz[i][j] += dt * vel.xyz[i][j] + At[i][j];
+		}
+	}
+
+	shakeAngles(top, crd.xyz, bondAngles, lambdasAngle);
+	shakePositions(top, crd.xyz, bondLengths, lambdas);
+
+ 	Matrix newForces = getTotalForces(crd.xyz);
+
+	for (i = 0; i < top.nAtoms; ++i)
+	{
+		mi = top.masses[i];
+		for (j = 0; j < 3; ++j)
+		{
+			vel.xyz[i][j] += (0.5 * dt * (1 / mi) * (newForces[i][j] + currForces[i][j])) - (dt * gamma * vel.xyz[i][j]) + (sigmais[i] * sqrt(dt) * xit[i][j]) - (gamma * At[i][j]);
+		}
+	}
+
+	shakeAnglesVelocities(top, crd.xyz, vel.xyz, bondAngles, lambdasAngle, param.dt, newForces);
+	shakeVelocities(top, crd.xyz, vel.xyz, bondLengths, lambdas, param.dt, newForces);
+
+	currForces = newForces;
+
+	std::vector<double> cog(3, 0.0);
+	std::vector<double> cov(3, 0.0);
+	for (i = 0; i < top.nAtoms; ++i)
+	{
+		cog[0] += crd.xyz[i][0];
+		cog[1] += crd.xyz[i][1];
+		cog[2] += crd.xyz[i][2];
+		cov[0] += vel.xyz[i][0];
+		cov[1] += vel.xyz[i][1];
+		cov[2] += vel.xyz[i][2];
+	}
+
+	cog[0] /= top.nAtoms;
+	cog[1] /= top.nAtoms;
+	cog[2] /= top.nAtoms;
+	cov[0] /= top.nAtoms;
+	cov[1] /= top.nAtoms;
+	cov[2] /= top.nAtoms;
+	for (i = 0; i < top.nAtoms; ++i)
+	{
+		crd.xyz[i][0] -= cog[0];
+		crd.xyz[i][1] -= cog[1];
+		crd.xyz[i][2] -= cog[2];
+		vel.xyz[i][0] -= cov[0];
+		vel.xyz[i][1] -= cov[1];
+		vel.xyz[i][2] -= cov[2];
+	}
+}
+
+
+void Simulation::integrateLangevin()
+{
+	int i, j;
+	double mi;
+	double temp = param.temperature;
+	double gamma = param.collisionFreq;
+	double dt = param.dt;
+	Matrix At, xit, thetat;
+	utils::growFillZeros(At, top.nAtoms, 3);
+	utils::growFillZeros(xit, top.nAtoms, 3);
+	utils::growFillZeros(thetat, top.nAtoms, 3);
+	
+	std::vector<double> sigmais(top.nAtoms);
+
+	// J = kg-m^2/s^2
+	// N = kg-m/s^2
+	for (i = 0; i < top.nAtoms; ++i)
+	{
+		mi = top.masses[i];
+		sigmais[i] = sqrt(2 * boltzmannK * temp * gamma / mi);
+		for (j = 0; j < 3; ++j)
+		{
+			xit[i][j] = utils::randNormal(0.0, 1.0);
+			thetat[i][j] = utils::randNormal(0.0, 1.0);
+		}
+		for (j = 0; j < 3; ++j)
+		{
+			At[i][j] = 0.5 * pow(dt, 2) * (currForces[i][j] / mi - gamma * vel.xyz[i][j]) + sigmais[i] * pow(dt, 1.5) * ((0.5) * xit[i][j] + (1.0 / (2 * sqrt(3))) * thetat[i][j]);
 			crd.xyz[i][j] += dt * vel.xyz[i][j] + At[i][j];
 		}
 	}
@@ -249,57 +385,41 @@ void Simulation::integrateLangevin()
 
 	for (i = 0; i < top.nAtoms; ++i)
 	{
+		gamma = param.collisionFreq;
+		mi = top.masses[i];
 		for (j = 0; j < 3; ++j)
 		{
-			vel.xyz[i][j] += (0.5 * dt * (newForces[i][j] + currForces[i][j])) - (dt * gamma * vel.xyz[i][j]) + (sigmais[i] * sqrt(dt) * xit[i][j]) - (gamma * At[i][j]);
+			vel.xyz[i][j] += (0.5 * dt * (1 / mi) * (newForces[i][j] + currForces[i][j])) - (dt * gamma * vel.xyz[i][j]) + (sigmais[i] * sqrt(dt) * xit[i][j]) - (gamma * At[i][j]);
 		}
 	}
-}
 
-void Simulation::integrateVVSHAKE()
-{
-	currForces = getTotalForces(crd.xyz);
-	/*
-	// make sure bond lengths stay the same (they do)
-	std::vector<double> bond(3);
-	for (int i = 0; i < top.bondIdx.size(); ++i)
-	{
+	currForces = newForces;
 
-		for (int j = 0; j < 3; ++j)
-		{
-			bond[j] = crd.xyz[top.bondIdx[i][0]][j] - crd.xyz[top.bondIdx[i][1]][j];
-		}
-		double norm = utils::norm(bond);
-		bondLengths[i] = norm;
-
-	}
-	std::cout << bondLengths << std::endl;
-	*/
-
-	int i, j;
-	double m;
-	double dt = param.dt;
+	std::vector<double> cog(3, 0.0);
 	for (i = 0; i < top.nAtoms; ++i)
 	{
-		m = top.masses[i];
-		crd.xyz[i][0] = crd.xyz[i][0] + (dt * vel.xyz[i][0]) + ((dt * dt) / (2 * m)) * currForces[i][0];
-		crd.xyz[i][1] = crd.xyz[i][1] + (dt * vel.xyz[i][1]) + ((dt * dt) / (2 * m)) * currForces[i][1];
-		crd.xyz[i][2] = crd.xyz[i][2] + (dt * vel.xyz[i][2]) + ((dt * dt) / (2 * m)) * currForces[i][2];
-		vel.xyz[i][0] = vel.xyz[i][0] + (1 / m) * (0.5 * dt) * currForces[i][0]; // initial velocity update (dt / 2)
-		vel.xyz[i][1] = vel.xyz[i][1] + (1 / m) * (0.5 * dt) * currForces[i][1];
-		vel.xyz[i][2] = vel.xyz[i][2] + (1 / m) * (0.5 * dt) * currForces[i][2];
+		cog[0] += crd.xyz[i][0];
+		cog[1] += crd.xyz[i][1];
+		cog[2] += crd.xyz[i][2];
 	}
 
-	shakePositions(top, crd.xyz, bondLengths, lambdas); // updates positions and lambdas
-
-	Matrix newForces = getTotalForces(crd.xyz);
-	shakeVelocities(top, crd.xyz, vel.xyz, bondLengths, lambdas, dt, newForces);  // updates velocities
+	cog[0] /= top.nAtoms;
+	cog[1] /= top.nAtoms;
+	cog[2] /= top.nAtoms;
+	for (i = 0; i < top.nAtoms; ++i)
+	{
+		crd.xyz[i][0] -= cog[0];
+		crd.xyz[i][1] -= cog[1];
+		crd.xyz[i][2] -= cog[2];
+	}
 }
+
 
 void Simulation::runVVDynamics(std::ofstream& logFile, std::ofstream& trajFile)
 {
 
 	nDegreesOfFreedom = 3 * top.nAtoms;  // 3N (no constraints)
+	currForces = getTotalForces(crd.xyz);
 
 	for (int s = 0; s < param.nSteps; ++s)
 	{
@@ -311,19 +431,6 @@ void Simulation::runVVDynamics(std::ofstream& logFile, std::ofstream& trajFile)
 	}
 }
 
-void Simulation::runLangevinDynamics(std::ofstream& logFile, std::ofstream &trajFile)
-{
-	nDegreesOfFreedom = 3 * top.nAtoms; // 3N (no constraints)
-
-	for (int s = 0; s < param.nSteps; ++s)
-	{
-		currEnergy = getTotalEnergy(crd.xyz);
-		currKineticEnergy = getKineticEnergy(vel.xyz);
-		currTemperature = (2.0 * currKineticEnergy) / (nDegreesOfFreedom * boltzmannK);
-		if (s % param.reportInterval == 0) report(logFile, trajFile, s);
-		integrateLangevin();
-	}
-}
 
 void Simulation::runVVDynamicsSHAKE(std::ofstream& logFile, std::ofstream &trajFile)
 {
@@ -342,6 +449,8 @@ void Simulation::runVVDynamicsSHAKE(std::ofstream& logFile, std::ofstream &trajF
 		norm = utils::norm(bond);
 		bondLengths.push_back(norm);
 	}
+
+	currForces = getTotalForces(crd.xyz);
 	for (int s = 0; s < param.nSteps; ++s)
 	{
 		currEnergy = getTotalEnergy(crd.xyz);
@@ -351,6 +460,96 @@ void Simulation::runVVDynamicsSHAKE(std::ofstream& logFile, std::ofstream &trajF
 		integrateVVSHAKE();
 	}
 }
+
+
+void Simulation::runVVDynamicsSHAKEAngles(std::ofstream& logFile, std::ofstream& trajFile)
+{
+	nDegreesOfFreedom = 3 * top.nAtoms - top.bondIdx.size() - top.angleIdx.size();  // 3N - # constraints
+
+	double norm;
+	std::vector<double> bond(3), bond1(3), bond2(3);
+	for (int i = 0; i < top.bondIdx.size(); ++i)
+	{
+		lambdas.push_back(0.0);
+		
+		for (int j = 0; j < 3; ++j)
+		{
+			bond[j] = crd.xyz[top.bondIdx[i][0]][j] - crd.xyz[top.bondIdx[i][1]][j];
+		}
+		bond = utils::pbcAdjust(top, bond);
+		bondLengths.push_back(utils::norm(bond));
+	}
+
+	for (int i = 0; i < top.angleIdx.size(); ++i)
+	{
+		lambdasAngle.push_back(0.0);
+		bondAngles.push_back(utils::getAngle(top, crd.xyz[top.angleIdx[i][0]], crd.xyz[top.angleIdx[i][1]], crd.xyz[top.angleIdx[i][2]]));
+	}
+	currForces = getTotalForces(crd.xyz);
+	for (int s = 0; s < param.nSteps; ++s)
+	{
+		currEnergy = getTotalEnergy(crd.xyz);
+		currKineticEnergy = getKineticEnergy(vel.xyz);
+		currTemperature = (2.0 * currKineticEnergy) / (nDegreesOfFreedom * boltzmannK);
+		if (s % param.reportInterval == 0) report(logFile, trajFile, s);
+		integrateVVSHAKEAngles();
+	}
+}
+
+
+void Simulation::runLangevinDynamics(std::ofstream& logFile, std::ofstream &trajFile)
+{
+	nDegreesOfFreedom = 3 * top.nAtoms; // 3N (no constraints)
+
+	currForces = getTotalForces(crd.xyz);
+	for (int s = 0; s < param.nSteps; ++s)
+	{
+		currEnergy = getTotalEnergy(crd.xyz);
+		currKineticEnergy = getKineticEnergy(vel.xyz);
+		currTemperature = (2.0 * currKineticEnergy) / (nDegreesOfFreedom * boltzmannK);
+		if (s % param.reportInterval == 0) report(logFile, trajFile, s);
+		integrateLangevin();
+	}
+}
+
+
+void Simulation::runLangevinDynamicsSHAKEAngles(std::ofstream& logFile, std::ofstream& trajFile)
+{
+	currForces = getTotalForces(crd.xyz);
+
+	nDegreesOfFreedom = 3 * top.nAtoms - top.bondIdx.size() - top.angleIdx.size() - 3;  // 3N - # constraints - 3 (for com stationary)
+
+	double norm;
+	std::vector<double> bond(3), bond1(3), bond2(3);
+	for (int i = 0; i < top.bondIdx.size(); ++i)
+	{
+		lambdas.push_back(0.0);
+		
+		for (int j = 0; j < 3; ++j)
+		{
+			bond[j] = crd.xyz[top.bondIdx[i][0]][j] - crd.xyz[top.bondIdx[i][1]][j];
+		}
+		bond = utils::pbcAdjust(top, bond);
+		bondLengths.push_back(utils::norm(bond));
+	}
+
+	for (int i = 0; i < top.angleIdx.size(); ++i)
+	{
+		lambdasAngle.push_back(0.0);
+		bondAngles.push_back(utils::getAngle(top, crd.xyz[top.angleIdx[i][0]], crd.xyz[top.angleIdx[i][1]], crd.xyz[top.angleIdx[i][2]]));
+	}
+
+	currForces = getTotalForces(crd.xyz);
+	for (int s = 0; s < param.nSteps; ++s)
+	{
+		currEnergy = getTotalEnergy(crd.xyz);
+		currKineticEnergy = getKineticEnergy(vel.xyz);
+		currTemperature = (2.0 * currKineticEnergy) / (nDegreesOfFreedom * boltzmannK);
+		if (s % param.reportInterval == 0) report(logFile, trajFile, s);
+		integrateLangevinSHAKEAngles();
+	}
+}
+
 
 void Simulation::crawl()
 {
@@ -371,14 +570,42 @@ void Simulation::crawl()
 	else if (param.integrator == "vv")
 	{
 		std::cout << "running dynamics (NVE)..." << std::endl;
-		if (param.constrainBonds) runVVDynamicsSHAKE(logFile, trajFile);
-		else runVVDynamics(logFile, trajFile);
+		if (param.constrainBonds && !param.constrainAngles)
+		{
+			runVVDynamicsSHAKE(logFile, trajFile);
+		}
+		else if (param.constrainBonds && param.constrainAngles)
+		{
+			runVVDynamicsSHAKEAngles(logFile, trajFile);
+		}
+		else if (!param.constrainBonds && param.constrainAngles)
+		{
+			std::cout << "can't constrain angles without constraining bonds!" << std::endl;
+		}
+		else
+		{
+			runVVDynamics(logFile, trajFile);
+		}
 	}
 	else if (param.integrator == "langevin")
 	{
 		std::cout << "running dynamics (NVT)..." << std::endl;
-		if (param.constrainBonds);
-		else runLangevinDynamics(logFile, trajFile);
+		if (param.constrainBonds && !param.constrainAngles)
+		{
+			// runLangevinDynamicsSHAKE(logFile, trajFile);
+		}
+		else if (param.constrainBonds && param.constrainAngles)
+		{
+			runLangevinDynamicsSHAKEAngles(logFile, trajFile);
+		}
+		else if (!param.constrainBonds && param.constrainAngles)
+		{
+			std::cout << "can't constrain angles without constraining bonds!" << std::endl;
+		}
+		else
+		{
+			runLangevinDynamics(logFile, trajFile);
+		}
 	}
 
 	logFile << endMessage << std::endl;
@@ -387,5 +614,4 @@ void Simulation::crawl()
 	trajFile.close();
 	logFile.close();
 }
-
 

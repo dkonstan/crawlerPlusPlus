@@ -118,6 +118,21 @@ void Topology::readTopology(std::string topFile)
 				}
 			}
 
+			if (line == "<nonbonded_exclude>")
+			{
+				std::getline(top, line);
+				while (line != "<end>")
+				{
+					int bondNumber1 = std::stoi(line.substr(0, line.find(delim)));
+					int bondNumber2 = std::stoi(line.substr(nthSubstr(1, line, delim)));
+					bondIdxRow.push_back(bondNumber1);
+					bondIdxRow.push_back(bondNumber2);
+					nonBondedExclusionIdx.push_back(bondIdxRow);
+					bondIdxRow.clear();
+					std::getline(top, line);
+				}
+			}
+
 			if (line == "<angles>")
 			{
 				std::getline(top, line);
@@ -166,19 +181,16 @@ void Topology::readTopology(std::string topFile)
 				std::getline(top, line);
 				while (line != "<end>")
 				{
+
 					int vdwNumber1 = std::stoi(line.substr(0, line.find(delim)));
-					int vdwNumber2 = std::stoi(line.substr(nthSubstr(1, line, delim)));
+					double vdwNumber2 = std::stod(line.substr(nthSubstr(1, line, delim)));
 					double vdwNumber3 = std::stod(line.substr(nthSubstr(2, line, delim)));
-					double vdwNumber4 = std::stod(line.substr(nthSubstr(3, line, delim)));
-					double vdwNumber5 = std::stod(line.substr(nthSubstr(4, line, delim)));
-					
-					vdwIdxRow.push_back(vdwNumber1);
-					vdwIdxRow.push_back(vdwNumber2);
-					vdwSigmas1.push_back(vdwNumber3);
-					vdwSigmas2.push_back(vdwNumber4);
-					vdwEpsilons.push_back(vdwNumber5);
-					vdwIdx.push_back(vdwIdxRow);
-					vdwIdxRow.clear();
+
+					// vdwIdxRow.push_back(vdwNumber1);
+					vdwSigmas.push_back(vdwNumber2);
+					vdwEpsilons.push_back(vdwNumber3);
+					// vdwIdx.push_back(vdwIdxRow);
+					// vdwIdxRow.clear();
 					std::getline(top, line);
 				}
 			}
@@ -263,16 +275,12 @@ std::ostream& operator<<(std::ostream& os, const Topology& topol)
 	}
 
 	os << "\n\tVDW:";
-	for (int i = 0; i < topol.vdwIdx.size(); ++i)
+	for (int i = 0; i < topol.vdwSigmas.size(); ++i)
 	{
 		os << "\n\t";
-		for (int j = 0; j < topol.vdwIdx[i].size(); ++j)
-		{
-			os << topol.vdwIdx[i][j] << " ";
-		}
-		// convert back to degrees for printing
-		os << "σ1: " << topol.vdwSigmas1[i] << " σ2: " << topol.vdwSigmas2[i] << " ε: " << topol.vdwEpsilons[i];
+		os << i << " " << "σ: " << topol.vdwSigmas[i] << " ε: " << topol.vdwEpsilons[i];
 	}
+
 	os << "\n\tbox dimensions:";
 	os << "\n\t";
 	os << topol.box[0] <<  " " << topol.box[1] << " " << topol.box[2];
@@ -314,9 +322,9 @@ void Coordinates::readCoordinates(std::string crdFile)
 			double x = std::stod(line.substr(nthSubstr(1, line, delim)));
 			double y = std::stod(line.substr(nthSubstr(2, line, delim)));
 			double z = std::stod(line.substr(nthSubstr(3, line, delim)));
-			xyzRow.push_back(x);
-			xyzRow.push_back(y);
-			xyzRow.push_back(z);
+			xyzRow.push_back(x * 1e-10);  // input in Å, crawling in meters
+			xyzRow.push_back(y * 1e-10);
+			xyzRow.push_back(z * 1e-10);
 			xyz.push_back(xyzRow);
 			xyzRow.clear();
 		}
@@ -326,6 +334,8 @@ void Coordinates::readCoordinates(std::string crdFile)
 		std::cout << "ERROR: fix coordinate xyz file" << std::endl;
 		exit(1);
 	}
+	// std::cout << xyz << std::endl;
+	// exit(0);
 	crd.close();
 }
 
@@ -388,18 +398,15 @@ void Velocities::setToTemperature(Topology& top, double temperature)
 {
 	
 	double randNormal;
-	std::default_random_engine generator;
-	std::normal_distribution<double> distribution(0.0, 1.0);
-
 	for (int i = 0; i < top.nAtoms; ++i)
 	{
 		double m = top.masses[i];
 		double prefactor = sqrt((boltzmannK * temperature) / (2 * m));
-		randNormal = distribution(generator);
+		randNormal = utils::randNormal(0.0, 1.0);
 		xyz[i][0] = prefactor * randNormal;
-		randNormal = distribution(generator);
+		randNormal = utils::randNormal(0.0, 1.0);
 		xyz[i][1] = prefactor * randNormal;
-		randNormal = distribution(generator);
+		randNormal = utils::randNormal(0.0, 1.0);
 		xyz[i][2] = prefactor * randNormal;
 	}
 }
@@ -442,6 +449,10 @@ void Parameters::readParameters(std::string paramFile)
 		else if (line.rfind("constrainBonds:") == 0)
 		{
 			constrainBonds = bool(std::stoi(line.substr(nthSubstr(1, line, delim))));
+		}
+		else if (line.rfind("constrainAngles:") == 0)
+		{
+			constrainAngles = bool(std::stoi(line.substr(nthSubstr(1, line, delim))));
 		}
 		else if (line.rfind("temperature:") == 0)
 		{
@@ -548,9 +559,65 @@ std::ostream& operator<<(std::ostream& os, const std::vector<std::vector<int> >&
 
 namespace utils
 {
+double randNormal(double mean, double stddev)
+{	
+	// Box muller method
+	// https://stackoverflow.com/questions/19944111/creating-a-gaussian-random-generator-with-a-mean-and-standard-deviation
+    static double n2 = 0.0;
+    static int n2_cached = 0;
+    if (!n2_cached)
+    {
+        double x, y, r;
+        do
+        {
+            x = 2.0 * rand() / RAND_MAX - 1;
+            y = 2.0 * rand() / RAND_MAX - 1;
+
+            r = x * x + y * y;
+        } while (r == 0.0 || r > 1.0);
+
+        {
+            double d = sqrt(-2.0 * log(r) / r);
+            double n1 = x * d;
+            n2 = y * d;
+            double result = n1*stddev + mean;
+            n2_cached = 1;
+            return result;
+        }
+    }
+    else
+    {
+        n2_cached = 0;
+        return n2 * stddev + mean;
+    }
+}
+
+double getAngle(const Topology& top, const std::vector<double>& pos1, const std::vector<double>& pos2, const std::vector<double>& pos3)
+{
+	std::vector<double> bond1(3), bond2(3);
+	for (int i = 0; i < 3; ++i)
+	{
+		bond1[i] = pos1[i] - pos2[i];
+		bond2[i] = pos3[i] - pos2[i];
+	}
+	bond1 = pbcAdjust(top, bond1);
+	bond2 = pbcAdjust(top, bond2);
+
+	double norm1 = utils::norm(bond1);
+	double norm2 = utils::norm(bond2);
+	for (int i = 0; i < 3; ++i)
+	{
+		bond1[i] /= norm1;
+		bond2[i] /= norm2;
+	}
+
+	double angle = acos(utils::dot(bond1, bond2));
+	return angle;
+}
 
 std::vector<double> pbcAdjust(const Topology& top, std::vector<double>& vec) // only for 3-vectors!
 {
+	// eventually stop making a new vector, this is wasteful!
 	std::vector<double> newVec(3);
 	for (int k = 0; k < 3; ++k)
 	{

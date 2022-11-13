@@ -2,6 +2,7 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <ctime>
 #include "utils.hpp"
 #include "forces.hpp"
 #include "simulation.hpp"
@@ -22,12 +23,12 @@ or crawler won't crawl\n\n";
 	else 
 	{
 		std::vector<std::string> args;
-		std::string topologyFilename;
-		std::string coordFilename;
-		std::string inputFilename;
-		std::string trajectoryFilename;
-		std::string logFilename;
-		std::string outFilename;
+		std::string topologyFilename = "";
+		std::string coordFilename = "";
+		std::string inputFilename = "";
+		std::string trajectoryFilename = "";
+		std::string logFilename = "";
+		std::string outFilename = "";
 		std::vector<std::string> inputErr;
 		int i;
 		for (i = 1; i < argc; ++i) args.push_back(argv[i]);
@@ -61,25 +62,25 @@ or crawler won't crawl\n\n";
 			}
 			++i;
 		}
-		if (topologyFilename.length() == 0) inputErr.push_back("missing topology (-t)");
-		if (coordFilename.length() == 0) inputErr.push_back("missing coordinates (-c)");
-		if (inputFilename.length() == 0) inputErr.push_back("missing input file (-i)");
-		if (trajectoryFilename.length() == 0) inputErr.push_back("missing trajectory (-o)");
-		if (logFilename.length() == 0) inputErr.push_back("missing log file (-l)");
-		if (outFilename.length() == 0) inputErr.push_back("missing outfile file (-x)");
-
-		if (inputErr.size() > 0)
-		{
-			std::cout << inputErr << std::endl;
-			std::cout << helpMessage << std::endl;
-			return 1;
-		}
+		// if (topologyFilename.length() == 0) inputErr.push_back("missing topology (-t)");
+		// if (coordFilename.length() == 0) inputErr.push_back("missing coordinates (-c)");
+		// if (inputFilename.length() == 0) inputErr.push_back("missing input file (-i)");
+		// if (trajectoryFilename.length() == 0) inputErr.push_back("missing trajectory (-o)");
+		// if (logFilename.length() == 0) inputErr.push_back("missing log file (-l)");
+		// if (outFilename.length() == 0) inputErr.push_back("missing outfile file (-x)");
+		// std::cout << inputErr.size() << std::endl;
+		// if (inputErr.size() > 0)
+		// {
+		// 	std::cout << helpMessage << std::endl;
+		// 	return 1;
+		// }
 
 		std::ofstream logfile;
 		logfile.open(logFilename);
 
 		Topology top(topologyFilename);
 		top.checkTopology();
+
 		logfile << top << std::endl;
 		Coordinates crd(coordFilename);
 		crd.checkCoordinates(top);
@@ -88,13 +89,14 @@ or crawler won't crawl\n\n";
 		param.checkParameters();
 		logfile << param << std::endl;
 		Velocities vel(top, param);
+		srand((unsigned) time(NULL));  // unique seed for the random number generator
 		vel.setToTemperature(top, param.temperature);
 
 		std::vector<Force> forces;
 		if (top.bondIdx.size() > 0) forces.push_back(Force("bond"));
 		if (top.angleIdx.size() > 0) forces.push_back(Force("angle"));
-		if (top.dihedralIdx.size() > 0) forces.push_back(Force("dihedral"));
-		if (top.vdwIdx.size() > 0) forces.push_back(Force("vdw"));
+		// if (top.dihedralIdx.size() > 0) forces.push_back(Force("dihedral"));
+		if (top.vdwSigmas.size() > 0) forces.push_back(Force("vdw"));
 		if (top.charges.size() > 0) forces.push_back(Force("coulomb"));
 
 		Simulation sim(top, crd, vel, param, forces, trajectoryFilename, logFilename, outFilename);

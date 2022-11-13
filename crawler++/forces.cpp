@@ -6,10 +6,12 @@
 #include "utils.hpp"
 
 
+
 Force::~Force()
 {
 	;
 }
+
 
 std::ostream& operator<<(std::ostream& os, const Force& force)
 {
@@ -17,6 +19,7 @@ std::ostream& operator<<(std::ostream& os, const Force& force)
 
 	return os;
 }
+
 
 void Force::setEnergyFunction()
 {
@@ -100,6 +103,7 @@ double getBondEnergy(const Topology& top, const Matrix& xyz)
 	return bondEnergy;
 }
 
+
 Matrix getBondForces(const Topology& top, const Matrix& xyz)
 {
 	Matrix bondForces;
@@ -139,6 +143,7 @@ Matrix getBondForces(const Topology& top, const Matrix& xyz)
 
 	return bondForces;
 }
+
 
 double getAngleEnergy(const Topology& top, const Matrix& xyz)
 {
@@ -197,6 +202,7 @@ double getAngleEnergy(const Topology& top, const Matrix& xyz)
 	return angleEnergy;
 }
 
+
 Matrix getAngleForces(const Topology& top, const Matrix& xyz)
 {
 	Matrix angleForces;
@@ -206,7 +212,6 @@ Matrix getAngleForces(const Topology& top, const Matrix& xyz)
 	int i, j;
 	for (i = 0; i < top.angleIdx.size(); ++i)
 	{
-
 		int atom1Idx = top.angleIdx[i][0];
 		int atom2Idx = top.angleIdx[i][1];
 		int atom3Idx = top.angleIdx[i][2];
@@ -250,7 +255,6 @@ Matrix getAngleForces(const Topology& top, const Matrix& xyz)
 
 		const double angle = acos(dot1232);
 		const double angle0 = top.angleValues[i];
-
 		std::vector<double> forcei(3);
 		std::vector<double> forcek(3);
 		std::vector<double> rijVec(3);
@@ -424,8 +428,9 @@ Matrix getDihedralForces(const Topology& top, const Matrix& xyz)
 
 		dihedralAngle = acos(dott);
 
-		if (norm123 < 0.00001 || norm234 < 0.00001)  // if all atoms in dihedral are aligned (rare but possible)
+		if (norm123 < 1e-100 || norm234 < 1e-100)  // TODO is this small enough? if all atoms in dihedral are aligned (rare but possible)
 		{
+			// std::cout << "frog" << std::endl;
 			std::fill(force1.begin(), force1.end(), 0.0);
 			std::fill(force2.begin(), force2.end(), 0.0);
 			std::fill(force3.begin(), force3.end(), 0.0);
@@ -434,37 +439,46 @@ Matrix getDihedralForces(const Topology& top, const Matrix& xyz)
 		else
 		{
 			rijVec = vec12;  // actually vec21, so need to multiply by -1
-			for (j = 0; j < 3; ++j)
-			{
-				rijVec[j] = -rijVec[j];
-			}
-			rkjVec = vec23;
+
+			// for (j = 0; j < 3; ++j)
+			// {
+			// 	rijVec[j] = -rijVec[j];
+			// }
+			rkjVec = vec32;
 			rklVec = vec43;
 			rmjVec = utils::cross(rijVec, rkjVec);
 			rnkVec = utils::cross(rkjVec, rklVec);
+
+			rij = utils::norm(rijVec);
+			rkj = utils::norm(rkjVec);
+			rmj = utils::norm(rmjVec);
+			rnk = utils::norm(rnkVec);
+
+			double sign = utils::dot(rkjVec, utils::cross(utils::cross(rijVec, rkjVec), utils::cross(rkjVec, rklVec)));
+			if (sign > 0.0)
+			{
+				sign = 1.0;
+			}
+			else
+			{
+				sign = -1.0;
+			}
+			for (j = 0; j < 3; ++j)
+			{
+				forcei[j] = (rkj / (rmj * rmj)) * rmjVec[j];
+				forcel[j] = -(rkj / (rnk * rnk)) * rnkVec[j];
+				forcej[j] = ( (utils::dot(rijVec, rkjVec) / (rkj * rkj)) - 1.0 ) * forcei[j] - (utils::dot(rklVec, rkjVec) / (rkj * rkj)) * forcel[j];
+				forcek[j] = ( (utils::dot(rklVec, rkjVec) / (rkj * rkj)) - 1.0 ) * forcel[j] - (utils::dot(rijVec, rkjVec) / (rkj * rkj)) * forcei[j];
+			}
+
+			for (j = 0; j < 3; ++j)
+			{
+				force1[j] = sign * -kTheta * (dihedralAngle - dihedralAngle0) * forcei[j];
+				force2[j] = sign * -kTheta * (dihedralAngle - dihedralAngle0) * forcej[j];
+				force3[j] = sign * -kTheta * (dihedralAngle - dihedralAngle0) * forcek[j];
+				force4[j] = sign * -kTheta * (dihedralAngle - dihedralAngle0) * forcel[j];
+			}
 		}
-
-		rij = utils::norm(rijVec);
-		rkj = utils::norm(rkjVec);
-		rmj = utils::norm(rmjVec);
-		rnk = utils::norm(rnkVec);
-
-		for (j = 0; j < 3; ++j)
-		{
-			forcei[j] = (rkj / (rmj * rmj)) * rmjVec[j];
-			forcel[j] = -(rkj / (rnk * rnk)) * rnkVec[j];
-			forcej[j] = ( (utils::dot(rijVec, rkjVec) / (rkj * rkj)) - 1.0 ) * forcei[j] - (utils::dot(rklVec, rkjVec) / (rkj * rkj)) * forcel[j];
-			forcek[j] = ( (utils::dot(rklVec, rkjVec) / (rkj * rkj)) - 1.0 ) * forcel[j] - (utils::dot(rijVec, rkjVec) / (rkj * rkj)) * forcei[j];
-		}
-
-		for (j = 0; j < 3; ++j)
-		{
-			force1[j] = -kTheta * (dihedralAngle - dihedralAngle0) * forcei[j];
-			force2[j] = -kTheta * (dihedralAngle - dihedralAngle0) * forcej[j];
-			force3[j] = -kTheta * (dihedralAngle - dihedralAngle0) * forcek[j];
-			force4[j] = -kTheta * (dihedralAngle - dihedralAngle0) * forcel[j];
-		}
-
 		for (j = 0; j < 3; ++j)
 		{
 			dihedralForces[atom1Idx][j] += force1[j];
@@ -477,30 +491,82 @@ Matrix getDihedralForces(const Topology& top, const Matrix& xyz)
 	return dihedralForces;
 }
 
+
+
+bool bonded(const Topology& top, int i, int j)
+{
+	bool areBonded = false;
+	for (int n = 0; n < top.bondIdx.size(); ++n)
+	{
+		if (top.bondIdx[n][0] == i && top.bondIdx[n][1] == j)
+		{
+			areBonded = true;
+			break;
+		}
+		else if (top.bondIdx[n][1] == i && top.bondIdx[n][0] == j)
+		{
+			areBonded = true;
+			break;
+		}
+	}
+
+	return areBonded;
+}
+
+bool nonBondedExclude(const Topology& top, int i, int j)
+{
+	// are the two atoms a pair that is excluded from nonbonded interactions?
+	// e.g. the two hydrogens on a water molecule
+	bool sameMolecule = false;
+	for (int n = 0; n < top.nonBondedExclusionIdx.size(); ++n)
+	{
+		if (top.nonBondedExclusionIdx[n][0] == i && top.nonBondedExclusionIdx[n][1] == j)
+		{
+			sameMolecule = true;
+			break;
+		}
+		else if (top.nonBondedExclusionIdx[n][1] == i && top.nonBondedExclusionIdx[n][0] == j)
+		{
+			sameMolecule = true;
+			break;
+		}
+	}
+
+	return sameMolecule;
+}
+
+
 double getVDWEnergy(const Topology& top, const Matrix& xyz)
 {
-	double vdwEnergy = 0.0;
-	int i, j;
-	for (i = 0; i < top.vdwIdx.size(); ++i)
+	double vdwEnergy = 0.0, r;
+	double sigma1, sigma2, eps1, eps2;
+	int i, j, k;
+	std::vector<double> r1r2(3);
+	for (i = 0; i < top.nAtoms; ++i)
 	{
-		double atom1Idx, atom2Idx, sigma, epsilon, r;
-		std::vector<double> r1r2(3);
-
-		atom1Idx = top.vdwIdx[i][0];
-		atom2Idx = top.vdwIdx[i][1];
-		sigma = top.vdwSigmas1[i]; // fix sigmas1 sigmas2
-		epsilon = top.vdwEpsilons[i];
-
-		for (j = 0; j < 3; ++j)
+		sigma1 = top.vdwSigmas[i];
+		eps1 = top.vdwEpsilons[i];
+		for (j = i + 1; j < top.nAtoms; ++j)
 		{
-			r1r2[j] = xyz[atom1Idx][j] - xyz[atom2Idx][j];
-		}
-		r1r2 = utils::pbcAdjust(top, r1r2);
-		r = utils::norm(r1r2);
+			if (nonBondedExclude(top, i, j))
+			{
+				continue;
+			}
+			else
+			{
+				sigma2 = top.vdwSigmas[j];
+				eps2 = top.vdwEpsilons[j];
 
-		vdwEnergy += 4 * epsilon * (pow(sigma / r, 12) - pow(sigma / r, 6));
+				double sig = (sigma1 + sigma2) / 2;
+				double eps = sqrt(eps1 * eps2);
+				for (k = 0; k < 3; ++k) r1r2[k] = xyz[i][k] - xyz[j][k];
+				r1r2 = utils::pbcAdjust(top, r1r2);
+				r = utils::norm(r1r2);
+				vdwEnergy += 4 * eps * (pow(sig / r, 12) - pow(sig / r, 6));	
+			}
+		}
 	}
-	return 0.0;
+	return vdwEnergy;
 }
 
 
@@ -508,50 +574,122 @@ Matrix getVDWForces(const Topology& top, const Matrix& xyz)
 {
 	Matrix vdwForces;
 	utils::growFillZeros(vdwForces, top.nAtoms, 3);
+ 	double r;
+	double sigma1, sigma2, eps1, eps2;
+	int i, j, k;
+	std::vector<double> r1r2(3);
+	std::vector<double> r1r2Unit(3);
 
-	int i, j;
-	for (i = 0; i < top.vdwIdx.size(); ++i)
+	for (i = 0; i < top.nAtoms; ++i)
 	{
-		double atom1Idx, atom2Idx, sigma, epsilon, r;
-		std::vector<double> r1r2(3), unitVector(3);
+		sigma1 = top.vdwSigmas[i];
+		eps1 = top.vdwEpsilons[i];
+		for (j = 0; j < top.nAtoms; ++j)
+		{
+			if (j == i)
+			{
+				continue;
+			}
+			else if (nonBondedExclude(top, i, j))
+			{
+				continue;
+			}
+			else
+			{
+				sigma2 = top.vdwSigmas[j];
+				eps2 = top.vdwEpsilons[j];
 
-		atom1Idx = top.vdwIdx[i][0];
-		atom2Idx = top.vdwIdx[i][1];
-		sigma = top.vdwSigmas1[i]; // fix sigmas1 sigmas2
-		epsilon = top.vdwEpsilons[i];
-		for (j = 0; j < 3; ++j)
-		{
-			r1r2[j] = xyz[atom1Idx][j] - xyz[atom2Idx][j];
-		}
-		r1r2 = utils::pbcAdjust(top, r1r2);
-		r = utils::norm(r1r2);
+				double sig = (sigma1 + sigma2) / 2;
+				double eps = sqrt(eps1 * eps2);
+				for (k = 0; k < 3; ++k) r1r2[k] = xyz[i][k] - xyz[j][k];
+				r1r2 = utils::pbcAdjust(top, r1r2);
+				r = utils::norm(r1r2);
 
-		for (j = 0; j < 3; ++j)
-		{
-			unitVector[j] = r1r2[j] / r;	
-		}
-		for (j = 0; j < 3; ++j)
-		{
-			vdwForces[atom1Idx][j] += -4 * epsilon * (
-								(6 * pow(sigma, 6)) / pow(r, 7) - (12 * pow(sigma, 12)) / pow(r, 13)
-							) * unitVector[j];
-			vdwForces[atom2Idx][j] += -4 * epsilon * (
-								(6 * pow(sigma, 6)) / pow(r, 7) - (12 * pow(sigma, 12)) / pow(r, 13)
-							) * (-unitVector[j]);	
+				double r1r2SqNorm = 0.0;
+				for (k = 0; k < 3; ++k) r1r2SqNorm += r1r2[k] * r1r2[k];
+
+				vdwForces[i][0] += (24 * r1r2[0] * eps * pow(sig, 6) * (-pow(r1r2SqNorm, 3) + 2 * pow(sig, 6))) / pow(r1r2SqNorm, 7);
+				vdwForces[i][1] += (24 * r1r2[1] * eps * pow(sig, 6) * (-pow(r1r2SqNorm, 3) + 2 * pow(sig, 6))) / pow(r1r2SqNorm, 7);
+				vdwForces[i][2] += (24 * r1r2[2] * eps * pow(sig, 6) * (-pow(r1r2SqNorm, 3) + 2 * pow(sig, 6))) / pow(r1r2SqNorm, 7);
+			}
 		}
 	}
+
 	return vdwForces;
 }
 
+
 double getCoulombEnergy(const Topology& top, const Matrix& xyz)
 {
-	return 0.0;
+	double coulombEnergy = 0.0;
+	double r;
+	int i, j, k;
+	std::vector<double> rij(3);
+	for (i = 0; i < top.charges.size(); ++i)
+	{
+		for (j = i + 1; j < top.charges.size(); ++j)
+		{
+			if (nonBondedExclude(top, i, j))
+			{
+				continue;
+			}
+			for (k = 0; k < 3; ++k)
+			{
+				rij[k] = xyz[i][k] - xyz[j][k];
+			}
+			rij = utils::pbcAdjust(top, rij);
+			r = utils::norm(rij);
+
+			coulombEnergy += COULOMB_K * (top.charges[i] * top.charges[j]) / r;
+		}
+	}
+	return coulombEnergy;
 }
+
 
 Matrix getCoulombForces(const Topology& top, const Matrix& xyz)
 {
+	// TODO check this
 	Matrix coulombForces;
 	utils::growFillZeros(coulombForces, top.nAtoms, 3);
+	double r;
+	int i, j, k;
+	std::vector<double> rij(3);
+	for (i = 0; i < top.charges.size(); ++i)
+	{
+		for (j = 0; j < top.charges.size(); ++j)
+		{
+			if (j == i)
+			{
+				continue;
+			}
+			else if (nonBondedExclude(top, i, j))  // TODO this is right, right?
+			{
+				continue;
+			}
+			else
+			{
+				for (k = 0; k < 3; ++k)
+				{
+					rij[k] = xyz[i][k] - xyz[j][k];
+				}
+				rij = utils::pbcAdjust(top, rij);
+				r = utils::norm(rij);
+
+				// for (k = 0; k < 3; ++k)
+				// {
+				// 	rij[k] /= r;
+				// }
+
+				for (k = 0; k < 3; ++k)
+				{
+					coulombForces[i][k] += ((COULOMB_K * top.charges[i] * top.charges[j]) * rij[k]) / pow(r, 3);
+				}			
+			}
+
+		}
+	}
 	return coulombForces;
 }
+
 

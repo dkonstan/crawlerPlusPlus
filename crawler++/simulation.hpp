@@ -28,7 +28,9 @@ private:
 	double currEnergy, currKineticEnergy, currTemperature;
 	double nDegreesOfFreedom;
 	std::vector<double> bondLengths;
+	std::vector<double> bondAngles;
 	std::vector<double> lambdas;
+	std::vector<double> lambdasAngle;
 	double getTotalEnergy(const Matrix& xyz); // actually potential energy...
 	double getKineticEnergy(const Matrix& velxyz);
 	Matrix getTotalForces(const Matrix& xyz);
@@ -41,7 +43,12 @@ private:
 	void runLangevinDynamics(std::ofstream& logFile, std::ofstream& trajFile);
 	void runVVDynamicsSHAKE(std::ofstream& logFile, std::ofstream& trajFile);
 	void runLangevinDynamicsSHAKE(std::ofstream& logFile, std::ofstream& trajFile);
+	void runVVDynamicsSHAKEAngles(std::ofstream& logFile, std::ofstream& trajFile);
+	void integrateVVSHAKEAngles();
+	void runLangevinDynamicsSHAKEAngles(std::ofstream& logFile, std::ofstream& trajFile);
+	void integrateLangevinSHAKEAngles();
 	void report(std::ofstream& logFile, std::ofstream& trajFile, int step);
+	// void runLD(std::ofstream& logFile, std::ofstream &trajFile);
 friend std::ostream& operator<<(std::ostream& os, const Simulation& sim);
 };
 

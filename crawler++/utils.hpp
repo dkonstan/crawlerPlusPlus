@@ -11,7 +11,8 @@
 typedef std::vector<std::vector<double> > Matrix; // 2D vector, tired of typing the whole thing
 
 const double PI = 3.1415926535;
-const double boltzmannK = 3.167e-6; // Hartree / K (https://physics.stackexchange.com/questions/635767/boltzmann-constant-in-atomic-units)
+const double boltzmannK = 1.380649e-23;  // J / K
+const double COULOMB_K = 8.9875517923e9;  // N-m2/C^2
 
 class Topology
 {
@@ -32,10 +33,10 @@ public:
 	std::vector<double> dihedralThetas;
 	std::vector<double> charges;
 	std::vector<std::vector<int> > vdwIdx;
-	std::vector<double> vdwSigmas1;
-	std::vector<double> vdwSigmas2;
+	std::vector<double> vdwSigmas;
 	std::vector<double> vdwEpsilons;
 	std::vector<std::string> atomTypes;
+	std::vector<std::vector<int> > nonBondedExclusionIdx;
 	std::vector<double> box;
 	int nAtoms;
 
@@ -62,6 +63,7 @@ public:
 	int nSteps;
 	double dt;
 	bool constrainBonds;
+	bool constrainAngles;
 	double temperature;
 	int reportInterval;
 	double collisionFreq = 0;
@@ -114,5 +116,7 @@ namespace utils {
 	std::vector<double> flipSign(std::vector<double>& vec);
 	std::vector<double> solveEquation(Matrix& mat, std::vector<double>&& vec);
 	double max(std::vector<double> vec);
+	double getAngle(const Topology& top, const std::vector<double>& pos1, const std::vector<double>& pos2, const std::vector<double>& pos3);
+	double randNormal(double mean, double stddev);
 }
 #endif // UTILS_HPP

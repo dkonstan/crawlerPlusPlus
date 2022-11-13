@@ -1,4 +1,4 @@
-nSteps: 100000
+nSteps: 10000
 dt: 0.02
 constrainBonds: 0
 integrator: min
