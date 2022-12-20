@@ -584,13 +584,9 @@ Matrix getVDWForces(const Topology& top, const Matrix& xyz)
 	{
 		sigma1 = top.vdwSigmas[i];
 		eps1 = top.vdwEpsilons[i];
-		for (j = 0; j < top.nAtoms; ++j)
+		for (j = i + 1; j < top.nAtoms; ++j)
 		{
-			if (j == i)
-			{
-				continue;
-			}
-			else if (nonBondedExclude(top, i, j))
+			if (nonBondedExclude(top, i, j))
 			{
 				continue;
 			}
@@ -611,6 +607,10 @@ Matrix getVDWForces(const Topology& top, const Matrix& xyz)
 				vdwForces[i][0] += (24 * r1r2[0] * eps * pow(sig, 6) * (-pow(r1r2SqNorm, 3) + 2 * pow(sig, 6))) / pow(r1r2SqNorm, 7);
 				vdwForces[i][1] += (24 * r1r2[1] * eps * pow(sig, 6) * (-pow(r1r2SqNorm, 3) + 2 * pow(sig, 6))) / pow(r1r2SqNorm, 7);
 				vdwForces[i][2] += (24 * r1r2[2] * eps * pow(sig, 6) * (-pow(r1r2SqNorm, 3) + 2 * pow(sig, 6))) / pow(r1r2SqNorm, 7);
+
+				vdwForces[j][0] -= (24 * r1r2[0] * eps * pow(sig, 6) * (-pow(r1r2SqNorm, 3) + 2 * pow(sig, 6))) / pow(r1r2SqNorm, 7);
+				vdwForces[j][1] -= (24 * r1r2[1] * eps * pow(sig, 6) * (-pow(r1r2SqNorm, 3) + 2 * pow(sig, 6))) / pow(r1r2SqNorm, 7);
+				vdwForces[j][2] -= (24 * r1r2[2] * eps * pow(sig, 6) * (-pow(r1r2SqNorm, 3) + 2 * pow(sig, 6))) / pow(r1r2SqNorm, 7);
 			}
 		}
 	}
@@ -657,13 +657,9 @@ Matrix getCoulombForces(const Topology& top, const Matrix& xyz)
 	std::vector<double> rij(3);
 	for (i = 0; i < top.charges.size(); ++i)
 	{
-		for (j = 0; j < top.charges.size(); ++j)
+		for (j = i + 1; j < top.charges.size(); ++j)
 		{
-			if (j == i)
-			{
-				continue;
-			}
-			else if (nonBondedExclude(top, i, j))  // TODO this is right, right?
+			if (nonBondedExclude(top, i, j))  // TODO this is right, right?
 			{
 				continue;
 			}
@@ -684,6 +680,7 @@ Matrix getCoulombForces(const Topology& top, const Matrix& xyz)
 				for (k = 0; k < 3; ++k)
 				{
 					coulombForces[i][k] += ((COULOMB_K * top.charges[i] * top.charges[j]) * rij[k]) / pow(r, 3);
+					coulombForces[j][k] -= ((COULOMB_K * top.charges[i] * top.charges[j]) * rij[k]) / pow(r, 3);
 				}			
 			}
 

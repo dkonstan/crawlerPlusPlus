@@ -1,8 +1,0 @@
-nSteps: 10000
-dt: 2e-15
-constrainBonds: 1
-constrainAngles: 1
-integrator: langevin
-temperature: 600
-reportInterval: 100
-collisionFreq: 1e12

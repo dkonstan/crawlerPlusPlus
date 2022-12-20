@@ -235,17 +235,21 @@ void Simulation::integrateVVSHAKEAngles()
 		crd.xyz[i][2] = crd.xyz[i][2] + (param.dt * vel.xyz[i][2]) + ((param.dt * param.dt) / (2 * m)) * currForces[i][2];
 	}
 
+	shakeAngles(top, crd.xyz, bondAngles, lambdasAngle);
+	shakePositions(top, crd.xyz, bondLengths, lambdas);
+
 	Matrix newForces = getTotalForces(crd.xyz);
 
 	for (i = 0; i < top.nAtoms; ++i)
 	{
 		m = top.masses[i];
-		vel.xyz[i][0] = vel.xyz[i][0] + (1 / m) * (param.dt / 2) * (currForces[i][0] + newForces[i][0]);
-		vel.xyz[i][1] = vel.xyz[i][1] + (1 / m) * (param.dt / 2) * (currForces[i][1] + newForces[i][1]);
-		vel.xyz[i][2] = vel.xyz[i][2] + (1 / m) * (param.dt / 2) * (currForces[i][2] + newForces[i][2]) ;
+		// vel.xyz[i][0] = vel.xyz[i][0] + (1 / m) * (param.dt / 2) * (currForces[i][0] + newForces[i][0]);
+		// vel.xyz[i][1] = vel.xyz[i][1] + (1 / m) * (param.dt / 2) * (currForces[i][1] + newForces[i][1]);
+		// vel.xyz[i][2] = vel.xyz[i][2] + (1 / m) * (param.dt / 2) * (currForces[i][2] + newForces[i][2]) ;
+		vel.xyz[i][0] = vel.xyz[i][0] + (1 / m) * (param.dt / 2) * (currForces[i][0]);
+		vel.xyz[i][1] = vel.xyz[i][1] + (1 / m) * (param.dt / 2) * (currForces[i][1]);
+		vel.xyz[i][2] = vel.xyz[i][2] + (1 / m) * (param.dt / 2) * (currForces[i][2]);
 	}
-	shakeAngles(top, crd.xyz, bondAngles, lambdasAngle);
-	shakePositions(top, crd.xyz, bondLengths, lambdas);
 	shakeAnglesVelocities(top, crd.xyz, vel.xyz, bondAngles, lambdasAngle, param.dt, newForces);
 	shakeVelocities(top, crd.xyz, vel.xyz, bondLengths, lambdas, param.dt, newForces);
 
@@ -310,7 +314,7 @@ void Simulation::integrateLangevinSHAKEAngles()
 		mi = top.masses[i];
 		for (j = 0; j < 3; ++j)
 		{
-			vel.xyz[i][j] += (0.5 * dt * (1 / mi) * (newForces[i][j] + currForces[i][j])) - (dt * gamma * vel.xyz[i][j]) + (sigmais[i] * sqrt(dt) * xit[i][j]) - (gamma * At[i][j]);
+			vel.xyz[i][j] += (0.5 * dt * (1 / mi) * (currForces[i][j])) - (dt * gamma * vel.xyz[i][j]) + (sigmais[i] * sqrt(dt) * xit[i][j]) - (gamma * At[i][j]);
 		}
 	}
 
